@@ -27,7 +27,9 @@ class OpenAIApiConstruct(Construct):
             default_integration=apigateway.HttpIntegration(
                 f"{openai_base_url}/{{proxy}}",
                 proxy=True,
+                http_method="ANY",
                 options=apigateway.IntegrationOptions(
+                    passthrough_behavior=apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
                     request_parameters={
                         "integration.request.path.proxy": "method.request.path.proxy",
                         "integration.request.header.Authorization": f"'Bearer {os.getenv('OPENAI_API_KEY')}'",
@@ -87,113 +89,4 @@ class OpenAIApiConstruct(Construct):
                     )
                 ]
             )
-        )
-
-        chat_resource = openai_resource.add_resource("chat")
-        completions_resource = chat_resource.add_resource("completions")
-        
-        completions_resource.add_method(
-            "POST",
-            apigateway.HttpIntegration(
-                f"{openai_base_url}/chat/completions",
-                proxy=False,
-                http_method="POST",
-                options=apigateway.IntegrationOptions(
-                    request_parameters={
-                        "integration.request.header.Authorization": f"'Bearer {os.getenv('OPENAI_API_KEY')}'",
-                        "integration.request.header.Content-Type": "method.request.header.Content-Type"
-                    },
-                    passthrough_behavior=apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
-                    integration_responses=[
-                        apigateway.IntegrationResponse(
-                            status_code="200",
-                            response_parameters={
-                                "method.response.header.Content-Type": "integration.response.header.Content-Type"
-                            }
-                        )
-                    ]
-                )
-            ),
-            api_key_required=api_key_required,
-            request_parameters={
-                "method.request.header.Content-Type": True
-            },
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Content-Type": True
-                    }
-                )
-            ]
-        )
-
-        models_resource = openai_resource.add_resource("models")
-        
-        models_resource.add_method(
-            "GET",
-            apigateway.HttpIntegration(
-                f"{openai_base_url}/models",
-                proxy=False,
-                options=apigateway.IntegrationOptions(
-                    request_parameters={
-                        "integration.request.header.Authorization": f"'Bearer {os.getenv('OPENAI_API_KEY')}'"
-                    },
-                    integration_responses=[
-                        apigateway.IntegrationResponse(
-                            status_code="200",
-                            response_parameters={
-                                "method.response.header.Content-Type": "integration.response.header.Content-Type"
-                            }
-                        )
-                    ]
-                )
-            ),
-            api_key_required=api_key_required,
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Content-Type": True
-                    }
-                )
-            ]
-        )
-
-        embeddings_resource = openai_resource.add_resource("embeddings")
-        
-        embeddings_resource.add_method(
-            "POST",
-            apigateway.HttpIntegration(
-                f"{openai_base_url}/embeddings",
-                proxy=False,
-                http_method="POST",
-                options=apigateway.IntegrationOptions(
-                    request_parameters={
-                        "integration.request.header.Authorization": f"'Bearer {os.getenv('OPENAI_API_KEY')}'",
-                        "integration.request.header.Content-Type": "method.request.header.Content-Type"
-                    },
-                    passthrough_behavior=apigateway.PassthroughBehavior.WHEN_NO_TEMPLATES,
-                    integration_responses=[
-                        apigateway.IntegrationResponse(
-                            status_code="200",
-                            response_parameters={
-                                "method.response.header.Content-Type": "integration.response.header.Content-Type"
-                            }
-                        )
-                    ]
-                )
-            ),
-            api_key_required=api_key_required,
-            request_parameters={
-                "method.request.header.Content-Type": True
-            },
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Content-Type": True
-                    }
-                )
-            ]
         )

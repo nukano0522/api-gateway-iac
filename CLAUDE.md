@@ -6,14 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-AWS CDK (Python) を使用した API Gateway 統合インフラストラクチャ。OpenAI、AWS Bedrock、Firecrawl、Dify の各APIサービスを単一のAPI Gatewayで統合管理し、認証、モニタリング、使用量管理を一元化します。
+AWS CDK (Python) を使用した API Gateway 統合インフラストラクチャ。OpenAI と Firecrawl の各APIサービスを用途別の独立したAPI Gatewayで管理し、認証、モニタリング、使用量管理を統合します。
 
 ## Tech Stack
 
 - **Infrastructure**: AWS CDK v2 (Python 3.8+)
 - **依存関係**: `aws-cdk-lib==2.210.0`, `python-dotenv==1.1.1`
 - **AWS Services**: API Gateway, CloudWatch, Systems Manager, Secrets Manager
-- **API Integrations**: OpenAI (有効), Bedrock/Firecrawl/Dify (コメントアウト中)
+- **API Integrations**: OpenAI Gateway, Firecrawl Gateway
 
 ## Essential Commands
 
@@ -39,13 +39,13 @@ python -c "from dotenv import load_dotenv; load_dotenv(); import os; print(f'Acc
 cdk bootstrap
 
 # 3. 変更内容の確認
-cdk diff
+cdk diff --all
 
 # 4. CloudFormation テンプレートの生成と検証
 cdk synth
 
 # 5. デプロイ実行
-cdk deploy
+cdk deploy --all
 
 # 6. デプロイ完了後、APIキーを取得
 aws apigateway get-api-key --api-key <出力されたキーID> --include-value --region ap-northeast-1
@@ -54,68 +54,59 @@ aws apigateway get-api-key --api-key <出力されたキーID> --include-value -
 ### API動作確認
 
 ```bash
-# 環境変数設定
-export API_ENDPOINT="<CDKデプロイ後に出力されるURL>"
+# OpenAI Gateway エンドポイントのテスト
+export OPENAI_ENDPOINT="<OpenAI Gateway URL>"
 export API_KEY="<取得したAPIキー>"
 
-# OpenAI models エンドポイントのテスト
-curl -X GET "${API_ENDPOINT}/openai/models" \
+curl -X GET "${OPENAI_ENDPOINT}/models" \
   -H "x-api-key: ${API_KEY}" \
   -H "Accept: application/json"
 
-# Chat completion テスト
-curl -X POST "${API_ENDPOINT}/openai/chat/completions" \
+# Firecrawl Gateway エンドポイントのテスト
+export FIRECRAWL_ENDPOINT="<Firecrawl Gateway URL>"
+
+curl -X POST "${FIRECRAWL_ENDPOINT}/scrape" \
   -H "x-api-key: ${API_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"Hello"}],"max_tokens":50}'
+  -d '{"url":"https://example.com","formats":["markdown"]}'
 ```
 
 ## Project Structure
 
 ```
 infrastructure/
-├── .env                      # 環境変数 (gitignore)
-├── .env.example              # 環境変数テンプレート
-├── .venv/                    # Python仮想環境 (gitignore)
-├── app.py                    # CDKアプリケーションエントリポイント
-├── cdk.json                  # CDK設定 (app: "python3 app.py")
-├── requirements.txt          # Python依存関係
-├── cdk_constructs/           # 各APIサービスのコンストラクト (注: フォルダ名は cdk_constructs)
-│   ├── openai_api.py        # OpenAI統合 (有効)
-│   ├── bedrock_api.py       # Bedrock統合 (コメントアウト中)
-│   ├── firecrawl_api.py     # Firecrawl統合 (コメントアウト中)
-│   └── dify_api.py          # Dify統合 (コメントアウト中)
+├── .env                           # 環境変数 (gitignore)
+├── .env.example                   # 環境変数テンプレート
+├── .venv/                         # Python仮想環境 (gitignore)
+├── app.py                         # CDKアプリケーションエントリポイント
+├── cdk.json                       # CDK設定 (app: "python3 app.py")
+├── requirements.txt               # Python依存関係
+├── cdk_constructs/                # 各APIサービスのコンストラクト
+│   ├── openai_api.py             # OpenAI統合
+│   └── firecrawl_api.py          # Firecrawl統合
 └── stacks/
-    └── api_gateway_stack.py # メインスタック
+    ├── openai_gateway_stack.py   # OpenAI専用Gatewayスタック
+    ├── firecrawl_gateway_stack.py # Firecrawl専用Gatewayスタック
+    └── usage_plan_stack.py        # 統合使用量プランスタック
 ```
 
 ## 重要な実装詳細
 
-### 現在の制限事項
+### アーキテクチャ
 
-- **OpenAI APIのみ有効**: `stacks/api_gateway_stack.py` の93-96行目で OpenAI のみインスタンス化
-- 他のAPI (Bedrock, Firecrawl, Dify) はコメントアウト状態 (13-15行目, 99行目以降)
-
-### コメントアウトされたAPIの有効化
-
-```python
-# stacks/api_gateway_stack.py での変更例:
-
-# 1. importのコメントアウトを解除 (13-15行目)
-from cdk_constructs.bedrock_api import BedrockApiConstruct
-
-# 2. コンストラクトのインスタンス化 (99行目以降)
-bedrock_construct = BedrockApiConstruct(
-    self, "BedrockApi",
-    api=rest_api,
-    api_key_required=api_key_required
-)
-```
+- **用途別Gateway**: OpenAI と Firecrawl それぞれに独立したAPI Gatewayを構築
+- **統合使用量管理**: 共通の Usage Plan Stack で両Gatewayの使用量を統合管理
+- **スタック依存関係**: Usage Plan Stack は両Gateway Stackに依存
 
 ### OpenAI API キーの扱い
 
 現在の実装では `os.getenv('OPENAI_API_KEY')` を直接使用 (openai_api.py:33行目)。
 本番環境では AWS Secrets Manager または Systems Manager Parameter Store の使用を推奨。
+
+### Firecrawl API キーの扱い
+
+同様に `os.getenv('FIRECRAWL_API_KEY')` を使用。
+本番環境では適切なシークレット管理サービスへの移行を推奨。
 
 ## トラブルシューティング
 
@@ -124,7 +115,7 @@ bedrock_construct = BedrockApiConstruct(
 ```bash
 # CloudFormation イベントの確認
 aws cloudformation describe-stack-events \
-  --stack-name api-gateway-integration-stack \
+  --stack-name <stack-name> \
   --region ap-northeast-1 \
   --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`]'
 
@@ -132,7 +123,7 @@ aws cloudformation describe-stack-events \
 cdk context --clear
 
 # 詳細ログでデプロイ
-cdk deploy --verbose --require-approval never
+cdk deploy --all --verbose --require-approval never
 ```
 
 ### APIキー認証エラー (403 Forbidden)
@@ -143,22 +134,27 @@ aws apigateway get-api-keys --region ap-northeast-1
 
 # 使用量プランの確認
 aws apigateway get-usage-plans --region ap-northeast-1
+
+# 使用量プランとステージの関連確認
+aws apigateway get-usage-plan-keys --usage-plan-id <plan-id> --region ap-northeast-1
 ```
 
 ### CloudWatch ログの確認
 
 ```bash
-# ログストリーム一覧
+# OpenAI Gateway ログ
 aws logs describe-log-streams \
-  --log-group-name "/aws/apigateway/${API_GATEWAY_NAME}" \
+  --log-group-name "/aws/apigateway/openai-gateway" \
   --order-by LastEventTime \
   --descending \
   --limit 5
 
-# 最新のログ確認
-aws logs filter-log-events \
-  --log-group-name "/aws/apigateway/${API_GATEWAY_NAME}" \
-  --start-time $(date -u -d '10 minutes ago' +%s)000
+# Firecrawl Gateway ログ
+aws logs describe-log-streams \
+  --log-group-name "/aws/apigateway/firecrawl-gateway" \
+  --order-by LastEventTime \
+  --descending \
+  --limit 5
 ```
 
 ## 環境変数の詳細
@@ -166,19 +162,25 @@ aws logs filter-log-events \
 `.env.example` ファイルの主要設定:
 
 - **CDK設定**: `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`
-- **API Gateway**: `API_GATEWAY_NAME`, `API_GATEWAY_STAGE`
-- **使用量プラン**: レート制限 (1000 req/s)、バースト (2000)、日次クォータ (10000)
+- **OpenAI Gateway設定**: `OPENAI_GATEWAY_NAME`, `OPENAI_API_KEY`
+- **Firecrawl Gateway設定**: `FIRECRAWL_GATEWAY_NAME`, `FIRECRAWL_API_KEY`
+- **使用量プラン**: レート制限、バースト、クォータ設定
 - **監視**: CloudWatch Logs, X-Ray トレーシング有効
-- **CORS**: デフォルトで全オリジン許可 (本番では要変更)
+- **CORS**: 各Gateway個別に設定可能
 
 ## スタック削除
 
 ```bash
-# リソースの完全削除
-cdk destroy --force
+# 全スタックの削除（依存関係順）
+cdk destroy --all
+
+# 個別削除（依存関係に注意）
+cdk destroy UsagePlanStack
+cdk destroy FirecrawlGatewayStack
+cdk destroy OpenAIGatewayStack
 
 # 削除確認
-aws cloudformation describe-stacks \
-  --stack-name api-gateway-integration-stack \
+aws cloudformation list-stacks \
+  --stack-status-filter DELETE_COMPLETE \
   --region ap-northeast-1
 ```
