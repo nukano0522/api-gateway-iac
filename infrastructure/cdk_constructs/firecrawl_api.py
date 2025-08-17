@@ -31,9 +31,7 @@ class FirecrawlApiConstruct(Construct):
                 options=apigateway.IntegrationOptions(
                     request_parameters={
                         "integration.request.path.proxy": "method.request.path.proxy",
-                        "integration.request.header.Authorization": f"'Bearer {firecrawl_api_key}'",
-                        "integration.request.header.Content-Type": "method.request.header.Content-Type",
-                        "integration.request.header.Accept": "method.request.header.Accept"
+                        "integration.request.header.Authorization": f"'Bearer {firecrawl_api_key}'"
                     },
                     integration_responses=[
                         apigateway.IntegrationResponse(
@@ -64,8 +62,8 @@ class FirecrawlApiConstruct(Construct):
                 api_key_required=api_key_required,
                 request_parameters={
                     "method.request.path.proxy": True,
-                    "method.request.header.Content-Type": False,
-                    "method.request.header.Accept": False
+                    # "method.request.header.Content-Type": False,
+                    # "method.request.header.Accept": False
                 },
                 method_responses=[
                     apigateway.MethodResponse(

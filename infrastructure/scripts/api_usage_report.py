@@ -113,7 +113,7 @@ class ApiUsageReporter:
                 endDate=end_date
             )
             
-            logger.info(f"API使用量レスポンス: {response}")
+            # logger.info(f"API使用量レスポンス: {response}")
             
             # 使用量を集計
             total_usage = 0
